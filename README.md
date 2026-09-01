@@ -3,7 +3,7 @@
 A single searchable page that aggregates used-vehicle listings from multiple Japanese
 vehicle export sites — CarDealPage, CarFromJapan, BE FORWARD, SBT Japan, IBC Japan, and
 Car Junction — with filters for make, model, year, price, mileage, transmission, fuel
-type, and source site.
+type, vehicle type (sedan, SUV, Kei, etc.), and source site.
 
 Listings are scraped on a schedule you control (not on every search) into a local
 SQLite database; the web app reads only from that database.
@@ -119,10 +119,13 @@ src/
   lib/
     db.ts                 # Prisma client singleton (with the SQLite driver adapter)
     normalize.ts           # currency/mileage normalization helpers
+    bodyType.ts             # infers vehicle type (Sedan/SUV/Kei/etc.) from model + engine size
     types.ts               # shared frontend/API types
   scrapers/
     types.ts               # SiteAdapter interface
     runAll.ts              # orchestrator: runs every adapter, upserts, marks stale inactive
+    manualImport.ts         # upserts hand-entered listings (see manual-imports/)
+    backfillBodyType.ts     # one-off: fills in bodyType on rows scraped before it existed
     utils/httpClient.ts     # polite fetch wrapper (UA, delay, retry, cookie jar)
     utils/playwrightClient.ts # shared headless-browser context helper
     sites/                  # one file per site
@@ -143,3 +146,9 @@ src/
   `isActive: false` and hidden from search by default; check "Show sold/removed listings"
   in the sidebar to include them. Listings marked inactive before this field existed show
   no removal date, since we genuinely don't know when they disappeared.
+- **Vehicle type (Sedan, SUV, Kei, etc.) is inferred, not scraped** — none of these sites
+  reliably expose a body-type field per listing. `src/lib/bodyType.ts` derives it from the
+  model name (a lookup table covering common JDM export models, plus Lexus's alphanumeric
+  naming like `NX300`/`IS350`) and from engine size for Japan's "Kei" class (≤660cc). Runs
+  automatically on every scrape and manual import; unrecognized models are left
+  uncategorized rather than guessed, and just won't show up when filtering by type.

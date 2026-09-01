@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { prisma } from "../lib/db";
 import { parseNumeric } from "../lib/normalize";
+import { inferBodyType } from "../lib/bodyType";
 
 type ManualEntry = {
   sourceUrl: string;
@@ -79,7 +80,7 @@ async function main() {
       driveType: entry.driveType,
       engineCc: entry.engineCc,
       color: entry.color,
-      bodyType: entry.bodyType,
+      bodyType: entry.bodyType ?? inferBodyType(entry.model, entry.engineCc),
       location: entry.location,
       imageUrl: entry.imageUrl,
       description: entry.description ?? title,

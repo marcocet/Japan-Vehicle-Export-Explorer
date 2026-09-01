@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const includeInactive = request.nextUrl.searchParams.get("includeInactive") === "true";
   const activeFilter = includeInactive ? {} : { isActive: true };
 
-  const [makes, models, aggregates, sourceSites] = await Promise.all([
+  const [makes, models, aggregates, sourceSites, bodyTypes] = await Promise.all([
     prisma.listing.findMany({
       where: { ...activeFilter },
       distinct: ["make"],
@@ -30,12 +30,19 @@ export async function GET(request: NextRequest) {
       select: { sourceSite: true },
       orderBy: { sourceSite: "asc" },
     }),
+    prisma.listing.findMany({
+      where: { ...activeFilter, bodyType: { not: null } },
+      distinct: ["bodyType"],
+      select: { bodyType: true },
+      orderBy: { bodyType: "asc" },
+    }),
   ]);
 
   return NextResponse.json({
     makes: makes.map((m) => m.make),
     models: models.map((m) => m.model),
     sourceSites: sourceSites.map((s) => s.sourceSite),
+    bodyTypes: bodyTypes.map((b) => b.bodyType).filter((b): b is string => b !== null),
     price: { min: aggregates._min.priceUsd ?? 0, max: aggregates._max.priceUsd ?? 0 },
     year: { min: aggregates._min.year ?? 0, max: aggregates._max.year ?? 0 },
     mileage: { min: aggregates._min.mileageKm ?? 0, max: aggregates._max.mileageKm ?? 0 },

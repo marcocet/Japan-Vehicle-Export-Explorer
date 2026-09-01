@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
   const mileageMax = parseIntParam(params.get("mileageMax"));
   const transmission = params.get("transmission") ?? undefined;
   const fuelType = params.get("fuelType") ?? undefined;
+  const bodyType = params.get("bodyType") ?? undefined;
   const sourceSites = params.getAll("sourceSite");
   const sort = params.get("sort") ?? "newest";
   const page = Math.max(1, parseIntParam(params.get("page")) ?? 1);
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
     ...(model ? { model } : {}),
     ...(transmission ? { transmission } : {}),
     ...(fuelType ? { fuelType } : {}),
+    ...(bodyType ? { bodyType } : {}),
     ...(sourceSites.length > 0 ? { sourceSite: { in: sourceSites } } : {}),
     ...(yearMin !== undefined || yearMax !== undefined
       ? { year: { ...(yearMin !== undefined ? { gte: yearMin } : {}), ...(yearMax !== undefined ? { lte: yearMax } : {}) } }

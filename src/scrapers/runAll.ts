@@ -1,4 +1,5 @@
 import { prisma } from "../lib/db";
+import { inferBodyType } from "../lib/bodyType";
 import { SiteAdapter } from "./types";
 import { closeSharedBrowser } from "./utils/playwrightClient";
 
@@ -40,12 +41,14 @@ async function runAdapter(adapter: SiteAdapter): Promise<void> {
   const scrapedAt = new Date();
   for (const listing of listings) {
     seenIds.add(listing.sourceId);
+    // Sites don't reliably expose a body type per listing, so infer one when missing.
+    const bodyType = listing.bodyType ?? inferBodyType(listing.model, listing.engineCc);
     try {
       await prisma.listing.upsert({
         where: { sourceSite_sourceId: { sourceSite: adapter.siteKey, sourceId: listing.sourceId } },
-        create: { sourceSite: adapter.siteKey, isActive: true, scrapedAt, lastSeenAt: scrapedAt, ...listing },
+        create: { sourceSite: adapter.siteKey, isActive: true, scrapedAt, lastSeenAt: scrapedAt, ...listing, bodyType },
         // removedAt is cleared here in case a previously-removed listing has reappeared.
-        update: { isActive: true, scrapedAt, lastSeenAt: scrapedAt, removedAt: null, ...listing },
+        update: { isActive: true, scrapedAt, lastSeenAt: scrapedAt, removedAt: null, ...listing, bodyType },
       });
     } catch (err) {
       console.error(`[${adapter.siteKey}] failed to upsert listing ${listing.sourceId}:`, err);

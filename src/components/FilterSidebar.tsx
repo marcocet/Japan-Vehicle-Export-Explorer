@@ -14,6 +14,7 @@ export type FilterState = {
   mileageMax: string;
   transmission: string;
   fuelType: string;
+  bodyType: string;
   sourceSites: string[];
   sort: string;
   includeInactive: boolean;
@@ -30,6 +31,7 @@ export const EMPTY_FILTERS: FilterState = {
   mileageMax: "",
   transmission: "",
   fuelType: "",
+  bodyType: "",
   sourceSites: [],
   sort: "newest",
   includeInactive: false,
@@ -164,6 +166,18 @@ export default function FilterSidebar({ filters, filterOptions, onChange, onRese
           {FUEL_TYPES.map((f) => (
             <option key={f} value={f}>
               {f}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className={styles.field}>
+        <label htmlFor="bodyType">Vehicle type</label>
+        <select id="bodyType" value={filters.bodyType} onChange={(e) => onChange({ bodyType: e.target.value })}>
+          <option value="">Any</option>
+          {filterOptions?.bodyTypes.map((bt) => (
+            <option key={bt} value={bt}>
+              {bt}
             </option>
           ))}
         </select>

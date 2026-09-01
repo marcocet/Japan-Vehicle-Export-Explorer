@@ -20,6 +20,7 @@ function filtersFromSearchParams(params: URLSearchParams): FilterState {
     mileageMax: params.get("mileageMax") ?? "",
     transmission: params.get("transmission") ?? "",
     fuelType: params.get("fuelType") ?? "",
+    bodyType: params.get("bodyType") ?? "",
     sourceSites: params.getAll("sourceSite"),
     sort: params.get("sort") ?? "newest",
     includeInactive: params.get("includeInactive") === "true",
@@ -38,6 +39,7 @@ function buildQueryString(filters: FilterState, page: number, pageSize: number):
   if (filters.mileageMax) params.set("mileageMax", filters.mileageMax);
   if (filters.transmission) params.set("transmission", filters.transmission);
   if (filters.fuelType) params.set("fuelType", filters.fuelType);
+  if (filters.bodyType) params.set("bodyType", filters.bodyType);
   for (const site of filters.sourceSites) params.append("sourceSite", site);
   if (filters.sort && filters.sort !== "newest") params.set("sort", filters.sort);
   if (filters.includeInactive) params.set("includeInactive", "true");
