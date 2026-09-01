@@ -1,0 +1,14 @@
+[
+  {
+    "sourceUrl": "https://www.cardealpage.com/example-listing-url",
+    "make": "Toyota",
+    "model": "Land Cruiser",
+    "year": 2016,
+    "price": "$18,500",
+    "mileage": "62,000 km",
+    "transmission": "Automatic",
+    "fuelType": "Diesel",
+    "color": "White",
+    "imageUrl": "https://www.cardealpage.com/path/to/photo.jpg"
+  }
+]

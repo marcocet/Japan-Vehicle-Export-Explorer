@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Listing {
+  id         String @id @default(cuid())
+  sourceSite String
+  sourceId   String
+  sourceUrl  String
+
+  title String
+  make  String
+  model String
+  year  Int
+
+  priceUsd      Int
+  priceRaw      String?
+  priceCurrency String?
+
+  mileageKm   Int
+  mileageRaw  String?
+  mileageUnit String?
+
+  transmission String?
+  fuelType     String?
+  driveType    String?
+  engineCc     Int?
+  color        String?
+  bodyType     String?
+  location     String?
+
+  imageUrl    String?
+  description String?
+
+  isActive    Boolean   @default(true)
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  removedAt   DateTime?
+  scrapedAt   DateTime  @default(now())
+
+  @@unique([sourceSite, sourceId])
+  @@index([make])
+  @@index([model])
+  @@index([year])
+  @@index([priceUsd])
+  @@index([mileageKm])
+  @@index([sourceSite])
+  @@index([isActive])
+}
