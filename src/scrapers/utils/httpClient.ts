@@ -5,6 +5,12 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Randomizes a delay by ±spreadRatio, so request timing isn't perfectly periodic. */
+export function jitter(baseMs: number, spreadRatio = 0.3): number {
+  const spread = baseMs * spreadRatio;
+  return Math.max(0, baseMs + (Math.random() * 2 - 1) * spread);
+}
+
 type FetchOptions = {
   /** Minimum delay (ms) to wait before this request, to stay polite to the source site. */
   delayMs?: number;
@@ -49,7 +55,7 @@ export class CookieJar {
 export async function politeFetch(url: string, options: FetchOptions = {}): Promise<string> {
   const { delayMs = 1500, retries = 2, headers = {}, cookieJar } = options;
 
-  await sleep(delayMs);
+  await sleep(jitter(delayMs));
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {

@@ -6,6 +6,7 @@ import styles from "./explorer.module.css";
 import FilterSidebar, { EMPTY_FILTERS, FilterState } from "@/components/FilterSidebar";
 import ListingGrid from "@/components/ListingGrid";
 import Pagination from "@/components/Pagination";
+import ScrapeMonitor from "@/components/ScrapeMonitor";
 import { DEFAULT_PAGE_SIZE, DEFAULT_SORT, FiltersResponse, ListingsResponse, PAGE_SIZE_OPTIONS } from "@/lib/types";
 
 function filtersFromSearchParams(params: URLSearchParams): FilterState {
@@ -133,6 +134,7 @@ function ExplorerPage() {
             })}
           </p>
         )}
+        <ScrapeMonitor />
       </header>
       <div className={styles.layout}>
         <FilterSidebar

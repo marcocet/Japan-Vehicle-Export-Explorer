@@ -53,6 +53,9 @@ day-to-day development instead, stop the service and run `npm run dev` as usual.
 
 ## Scraping real data
 
+Nine makes are covered on the four working sites: Toyota, Nissan, Honda, Mazda,
+Mitsubishi, Subaru, Suzuki, Lexus, Daihatsu.
+
 ```bash
 npm run scrape
 ```
@@ -64,6 +67,45 @@ so a single bad scrape run doesn't wipe a site's listings from search results.
 
 It is **not** exposed as a web endpoint. It's a standalone script by design, so a future
 public deployment can't let a stranger trigger an expensive scrape job by hitting a URL.
+You can, however, watch a running scrape from the page itself — see "Watching a scrape
+run live" below.
+
+### Routine coverage vs. the one-off deep crawl
+
+Each site only has a few hundred to a few thousand listings pulled per run by default —
+a deliberately bounded slice, not the whole catalog (these sites carry tens of thousands
+of listings per make). There are two modes:
+
+- **`npm run scrape` (routine, what the cron job runs)** — the original bounded pass per
+  make, plus a small "newest first" pass (SBT Japan's `-created_at` sort, CarFromJapan's
+  "New Arrivals", Car Junction's "Stock No. High to Low" as the closest available proxy;
+  BE FORWARD already sorts newest-first by default) that stops paginating as soon as it
+  hits a listing already in the database. That's the mechanism for "only scrape what's
+  new since last time" — rather than a hardcoded time window, it stops exactly where it
+  catches up to known inventory, which stays correct even if a run is late or skipped.
+- **`npm run scrape:deep` (one-off, run by hand)** — a much deeper pass per make
+  (~500 listings instead of ~50-100), at a slower, randomized 3-6s pace instead of the
+  routine ~1.5s, specifically to stay well clear of anything that looks like hammering a
+  site. It's purely additive: it never marks anything stale, since a bounded 500-per-make
+  pass covering a fraction of a 60,000+ catalog can't tell you anything about the other
+  59,500 listings it didn't look at.
+
+Both request pacing throughout (not just the deep crawl) is jittered (±30%) rather than
+a fixed interval, so traffic doesn't look like a metronome.
+
+**On scrape risk**: this is still automated traffic to third-party sites, and there's no
+way to make that zero-risk — a sustained crawl can plausibly trigger a temporary
+rate-limit or CAPTCHA wall even at a conservative pace (see CarDealPage/IBC Japan for
+what that looks like when a site is already gating automated access outright). The
+choices above (bounded depth, slower pace, jitter) are mitigations, not guarantees.
+
+### Watching a scrape run live
+
+While `npm run scrape` or `npm run scrape:deep` is running, the page itself shows a
+"Scraping in progress" panel with live per-site progress (current make, listings found
+so far), polling `/api/scrape-status` every few seconds. That endpoint reads
+`scrape-status.json` in the project root, written by `runAll.ts` as it works — it's
+gitignored, since it's runtime state, not source.
 
 Run it manually whenever you want fresh data, or schedule it. On this machine it's
 already scheduled via `crontab -l`, refreshing every 6 hours:
@@ -137,18 +179,20 @@ src/
     page.tsx              # main search UI (client component)
     api/listings/route.ts
     api/filters/route.ts
-  components/             # FilterSidebar, ListingGrid, ListingCard, Pagination
+    api/scrape-status/route.ts # reads scrape-status.json for the live-progress panel
+  components/             # FilterSidebar, ListingGrid, ListingCard, Pagination, ScrapeMonitor
   lib/
     db.ts                 # Prisma client singleton (with the SQLite driver adapter)
     normalize.ts           # currency/mileage normalization helpers
     bodyType.ts             # infers vehicle type (Sedan/SUV/Kei/etc.) from model + engine size
     types.ts               # shared frontend/API types
   scrapers/
-    types.ts               # SiteAdapter interface
+    types.ts               # SiteAdapter interface (mode, knownIds, onProgress)
     runAll.ts              # orchestrator: runs every adapter, upserts, marks stale inactive
+    statusFile.ts           # reads/writes scrape-status.json for live progress
     manualImport.ts         # upserts hand-entered listings (see manual-imports/)
     backfillBodyType.ts     # one-off: fills in bodyType on rows scraped before it existed
-    utils/httpClient.ts     # polite fetch wrapper (UA, delay, retry, cookie jar)
+    utils/httpClient.ts     # polite fetch wrapper (UA, delay, retry, cookie jar, jitter)
     utils/playwrightClient.ts # shared headless-browser context helper
     sites/                  # one file per site
 ```

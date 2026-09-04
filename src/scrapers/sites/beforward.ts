@@ -1,13 +1,16 @@
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import { newContext } from "../utils/playwrightClient";
-import { sleep } from "../utils/httpClient";
+import { jitter, sleep } from "../utils/httpClient";
 import { parseNumeric } from "@/lib/normalize";
-import { NormalizedListing, SiteAdapter } from "../types";
+import { NormalizedListing, ScrapeOptions, SiteAdapter } from "../types";
 
 const BASE_URL = "https://www.beforward.jp";
 const ROW_SELECTOR = ".stocklist-row";
-const PAGES_PER_MAKE = 2;
+const PAGES_PER_MAKE = 2; // routine pass — unchanged from before. Already sorted "New
+// Arrivals" (sortkey=n below), so unlike the other sites this doesn't need a separate
+// newest-first discovery pass — the routine pass already serves double duty.
+const DEEP_PAGES_PER_MAKE = 18; // one-off deep crawl: ~500/make (~28/page)
 
 // BE FORWARD's own internal make ids, taken from its "Shop By Make" sidebar.
 const MAKES: { name: string; makeId: number }[] = [
@@ -19,6 +22,7 @@ const MAKES: { name: string; makeId: number }[] = [
   { name: "Subaru", makeId: 94 },
   { name: "Suzuki", makeId: 7 },
   { name: "Lexus", makeId: 68 },
+  { name: "Daihatsu", makeId: 10 },
 ];
 
 function toTitleCase(raw: string): string {
@@ -104,13 +108,16 @@ function parseRow($: cheerio.CheerioAPI, el: Element): NormalizedListing | null 
   };
 }
 
-async function scrapeMake(makeName: string, makeId: number): Promise<NormalizedListing[]> {
+async function scrapeMake(makeName: string, makeId: number, options: ScrapeOptions): Promise<NormalizedListing[]> {
   const results: NormalizedListing[] = [];
   const context = await newContext();
   const page = await context.newPage();
+  const isDeep = options.mode === "deep";
+  const maxPages = isDeep ? DEEP_PAGES_PER_MAKE : PAGES_PER_MAKE;
+  const baseDelay = isDeep ? 4500 : 1500;
 
   try {
-    for (let pageNum = 1; pageNum <= PAGES_PER_MAKE; pageNum++) {
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
       const url =
         pageNum === 1
           ? `${BASE_URL}/stocklist/make=${makeId}/sortkey=n`
@@ -119,7 +126,7 @@ async function scrapeMake(makeName: string, makeId: number): Promise<NormalizedL
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
         await page.waitForSelector(ROW_SELECTOR, { timeout: 15000 }).catch(() => {});
-        await sleep(1500);
+        await sleep(jitter(baseDelay));
       } catch (err) {
         console.error(`[beforward] failed to load ${url}:`, err);
         break;
@@ -130,10 +137,17 @@ async function scrapeMake(makeName: string, makeId: number): Promise<NormalizedL
       const rows = $(ROW_SELECTOR).toArray();
       if (rows.length === 0) break;
 
+      let newCount = 0;
       for (const el of rows) {
         const listing = parseRow($, el);
-        if (listing) results.push(listing);
+        if (!listing) continue;
+        results.push(listing);
+        if (!isDeep && !options.knownIds.has(listing.sourceId)) newCount++;
       }
+
+      // Already sorted newest-first, so once a full page is entirely known listings
+      // we've caught up — no need to keep paginating on the routine incremental pass.
+      if (!isDeep && newCount === 0 && pageNum > 1) break;
     }
   } finally {
     await context.close();
@@ -145,12 +159,13 @@ async function scrapeMake(makeName: string, makeId: number): Promise<NormalizedL
 export const beforwardAdapter: SiteAdapter = {
   siteKey: "beforward",
   displayName: "BE FORWARD",
-  async scrape() {
+  async scrape(options: ScrapeOptions) {
     const all: NormalizedListing[] = [];
     for (const { name, makeId } of MAKES) {
-      const listings = await scrapeMake(name, makeId);
+      const listings = await scrapeMake(name, makeId, options);
       console.log(`[beforward] ${name}: ${listings.length} listings`);
       all.push(...listings);
+      options.onProgress?.({ make: name, listingsSoFar: all.length });
     }
     return all;
   },

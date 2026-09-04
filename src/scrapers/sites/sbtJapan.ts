@@ -2,13 +2,13 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import { CookieJar, politeFetch } from "../utils/httpClient";
 import { parseNumeric } from "@/lib/normalize";
-import { NormalizedListing, SiteAdapter } from "../types";
+import { NormalizedListing, ScrapeOptions, SiteAdapter } from "../types";
 
 const BASE_URL = "https://www.sbtjapan.com";
 
 // A curated set of makes (SBT's internal make_id) to scrape, matched to the makes we
 // otherwise show sample data for. SBT lists tens of thousands of cars per make, so we
-// only pull the first few pages per make to stay polite and keep a local scrape run fast.
+// only pull a bounded number of pages per make to stay polite and keep runs reasonable.
 const MAKES: { name: string; makeId: number }[] = [
   { name: "Toyota", makeId: 2 },
   { name: "Nissan", makeId: 3 },
@@ -18,9 +18,17 @@ const MAKES: { name: string; makeId: number }[] = [
   { name: "Subaru", makeId: 7 },
   { name: "Suzuki", makeId: 9 },
   { name: "Lexus", makeId: 13 },
+  { name: "Daihatsu", makeId: 8 },
 ];
 
-const PAGES_PER_MAKE = 2;
+const PAGE_SIZE = 50;
+const PAGES_PER_MAKE = 2; // routine pass — unchanged from before
+const DISCOVERY_MAX_PAGES = 3; // newest-first pass, stops early once caught up to known stock
+const DEEP_PAGES_PER_MAKE = 10; // one-off deep crawl: ~500/make
+const DEEP_DELAY_MS = 4500; // slower, jittered pace for the deep crawl specifically
+
+// SBT's own "Newest listed" sort option (captured from its sort dropdown).
+const NEWEST_SORT = "is_dealer_stock,-is_photo_ok,is_reserved,-created_at";
 
 function normalizeTransmission(raw: string): string | undefined {
   const v = raw.trim().toUpperCase();
@@ -112,14 +120,29 @@ function parseCard($: cheerio.CheerioAPI, el: Element, makeName: string): Normal
   };
 }
 
-async function scrapeMake(makeName: string, makeId: number, cookieJar: CookieJar): Promise<NormalizedListing[]> {
+type PageScanConfig = {
+  maxPages: number;
+  delayMs?: number;
+  sort?: string;
+  /** If given, stop paginating once a full page yields nothing outside this set. */
+  stopWhenCaughtUpTo?: Set<string>;
+};
+
+async function scanPages(
+  makeId: number,
+  makeName: string,
+  cookieJar: CookieJar,
+  config: PageScanConfig
+): Promise<NormalizedListing[]> {
   const results: NormalizedListing[] = [];
 
-  for (let page = 1; page <= PAGES_PER_MAKE; page++) {
-    const url = `${BASE_URL}/used-cars/search?make_id=${makeId}&page=${page}`;
+  for (let page = 1; page <= config.maxPages; page++) {
+    let url = `${BASE_URL}/used-cars/search?make_id=${makeId}&page=${page}`;
+    if (config.sort) url += `&s=${encodeURIComponent(config.sort)}`;
+
     let html: string;
     try {
-      html = await politeFetch(url, { cookieJar });
+      html = await politeFetch(url, { cookieJar, delayMs: config.delayMs });
     } catch (err) {
       console.error(`[sbt_japan] failed to fetch ${url}:`, err);
       break;
@@ -129,26 +152,56 @@ async function scrapeMake(makeName: string, makeId: number, cookieJar: CookieJar
     const cards = $(".card-product").toArray();
     if (cards.length === 0) break;
 
+    let newCount = 0;
     for (const el of cards) {
       const listing = parseCard($, el, makeName);
-      if (listing) results.push(listing);
+      if (!listing) continue;
+      results.push(listing);
+      if (config.stopWhenCaughtUpTo && !config.stopWhenCaughtUpTo.has(listing.sourceId)) newCount++;
     }
+
+    if (config.stopWhenCaughtUpTo && newCount === 0) break;
   }
 
   return results;
 }
 
+function dedupe(listings: NormalizedListing[]): NormalizedListing[] {
+  const bySourceId = new Map<string, NormalizedListing>();
+  for (const listing of listings) bySourceId.set(listing.sourceId, listing);
+  return Array.from(bySourceId.values());
+}
+
 export const sbtJapanAdapter: SiteAdapter = {
   siteKey: "sbt_japan",
   displayName: "SBT Japan",
-  async scrape() {
+  async scrape(options: ScrapeOptions) {
     const cookieJar = new CookieJar();
     const all: NormalizedListing[] = [];
+
     for (const { name, makeId } of MAKES) {
-      const listings = await scrapeMake(name, makeId, cookieJar);
-      console.log(`[sbt_japan] ${name}: ${listings.length} listings`);
+      let listings: NormalizedListing[];
+
+      if (options.mode === "deep") {
+        listings = await scanPages(makeId, name, cookieJar, {
+          maxPages: DEEP_PAGES_PER_MAKE,
+          delayMs: DEEP_DELAY_MS,
+        });
+      } else {
+        const routine = await scanPages(makeId, name, cookieJar, { maxPages: PAGES_PER_MAKE });
+        const discovery = await scanPages(makeId, name, cookieJar, {
+          maxPages: DISCOVERY_MAX_PAGES,
+          sort: NEWEST_SORT,
+          stopWhenCaughtUpTo: options.knownIds,
+        });
+        listings = dedupe([...routine, ...discovery]);
+      }
+
       all.push(...listings);
+      console.log(`[sbt_japan] ${name}: ${listings.length} listings (${PAGE_SIZE}/page)`);
+      options.onProgress?.({ make: name, listingsSoFar: all.length });
     }
+
     return all;
   },
 };

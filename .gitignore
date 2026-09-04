@@ -50,3 +50,4 @@ next-env.d.ts
 
 # scrape cron output
 scrape.log
+scrape-status.json

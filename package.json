@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "scrape": "tsx src/scrapers/runAll.ts",
+    "scrape:deep": "tsx src/scrapers/runAll.ts --deep",
     "import:manual": "tsx src/scrapers/manualImport.ts"
   },
   "dependencies": {

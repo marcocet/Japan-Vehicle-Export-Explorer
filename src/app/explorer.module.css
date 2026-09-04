@@ -25,6 +25,24 @@
   opacity: 0.55;
 }
 
+.scrapeMonitor {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.08);
+  font-size: 0.8rem;
+}
+
+.scrapeMonitor ul {
+  margin-top: 0.35rem;
+  padding-left: 1.1rem;
+}
+
+.scrapeMonitorSite {
+  font-weight: 600;
+}
+
 .layout {
   display: flex;
   flex: 1;

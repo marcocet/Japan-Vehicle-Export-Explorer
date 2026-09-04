@@ -1,20 +1,26 @@
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import { politeFetch } from "../utils/httpClient";
-import { NormalizedListing, SiteAdapter } from "../types";
+import { NormalizedListing, ScrapeOptions, SiteAdapter } from "../types";
 
 const BASE_URL = "https://www.carjunction.com";
 const PER_PAGE = 25;
-const PAGES_PER_MAKE = 4; // offsets 0, 25, 50, 75
+const PAGES_PER_MAKE = 4; // routine pass — unchanged from before
+const DISCOVERY_MAX_PAGES = 3; // newest-first (proxy) pass, stops early once caught up
+const DEEP_PAGES_PER_MAKE = 20; // one-off deep crawl: ~500/make attempted
+
+// Car Junction has no true "date added" sort — "Stock No. High to Low" is the closest
+// available proxy, on the assumption that stock numbers are assigned roughly in order.
+const NEWEST_SORT = "sno_desc";
 
 // Most listings on this site show "Enquiry" instead of a price (contact for quote) —
 // only ones with an active discount show a real US$ figure. We can only carry listings
 // with a real price, so yield per page is low; that's a real characteristic of the site,
 // not a scraper bug.
-const MAKE_SLUGS = ["toyota", "nissan", "honda", "mazda", "mitsubishi", "suzuki", "subaru", "lexus"];
+const MAKE_SLUGS = ["toyota", "nissan", "honda", "mazda", "mitsubishi", "suzuki", "subaru", "lexus", "daihatsu"];
 
 function normalizeWhitespace(text: string): string {
-  return text.replace(/ /g, " ").replace(/\s+/g, " ").trim();
+  return text.replace(/ /g, " ").replace(/\s+/g, " ").trim();
 }
 
 function parseCard($: cheerio.CheerioAPI, el: Element): NormalizedListing | null {
@@ -71,15 +77,25 @@ function parseCard($: cheerio.CheerioAPI, el: Element): NormalizedListing | null
   };
 }
 
-async function scrapeMake(makeSlug: string): Promise<NormalizedListing[]> {
+type PageScanConfig = {
+  maxPages: number;
+  delayMs?: number;
+  sort?: string;
+  /** If given, stop paginating once a full page yields nothing outside this set. */
+  stopWhenCaughtUpTo?: Set<string>;
+};
+
+async function scanPages(makeSlug: string, config: PageScanConfig): Promise<NormalizedListing[]> {
   const results: NormalizedListing[] = [];
 
-  for (let page = 0; page < PAGES_PER_MAKE; page++) {
+  for (let page = 0; page < config.maxPages; page++) {
     const offset = page * PER_PAGE;
-    const url = `${BASE_URL}/make/${makeSlug}.html?&page=${offset}`;
+    let url = `${BASE_URL}/make/${makeSlug}.html?&page=${offset}`;
+    if (config.sort) url += `&orderby=${config.sort}`;
+
     let html: string;
     try {
-      html = await politeFetch(url);
+      html = await politeFetch(url, { delayMs: config.delayMs });
     } catch (err) {
       console.error(`[car_junction] failed to fetch ${url}:`, err);
       break;
@@ -89,25 +105,52 @@ async function scrapeMake(makeSlug: string): Promise<NormalizedListing[]> {
     const rows = $('div.row[onmouseover*="F9F9F9"]').toArray();
     if (rows.length === 0) break;
 
+    let newCount = 0;
     for (const el of rows) {
       const listing = parseCard($, el);
-      if (listing) results.push(listing);
+      if (!listing) continue;
+      results.push(listing);
+      if (config.stopWhenCaughtUpTo && !config.stopWhenCaughtUpTo.has(listing.sourceId)) newCount++;
     }
+
+    if (config.stopWhenCaughtUpTo && newCount === 0) break;
   }
 
   return results;
 }
 
+function dedupe(listings: NormalizedListing[]): NormalizedListing[] {
+  const bySourceId = new Map<string, NormalizedListing>();
+  for (const listing of listings) bySourceId.set(listing.sourceId, listing);
+  return Array.from(bySourceId.values());
+}
+
 export const carJunctionAdapter: SiteAdapter = {
   siteKey: "car_junction",
   displayName: "Car Junction",
-  async scrape() {
+  async scrape(options: ScrapeOptions) {
     const all: NormalizedListing[] = [];
+
     for (const slug of MAKE_SLUGS) {
-      const listings = await scrapeMake(slug);
-      console.log(`[car_junction] ${slug}: ${listings.length} priced listings`);
+      let listings: NormalizedListing[];
+
+      if (options.mode === "deep") {
+        listings = await scanPages(slug, { maxPages: DEEP_PAGES_PER_MAKE, delayMs: 4500 });
+      } else {
+        const routine = await scanPages(slug, { maxPages: PAGES_PER_MAKE });
+        const discovery = await scanPages(slug, {
+          maxPages: DISCOVERY_MAX_PAGES,
+          sort: NEWEST_SORT,
+          stopWhenCaughtUpTo: options.knownIds,
+        });
+        listings = dedupe([...routine, ...discovery]);
+      }
+
       all.push(...listings);
+      console.log(`[car_junction] ${slug}: ${listings.length} priced listings`);
+      options.onProgress?.({ make: slug, listingsSoFar: all.length });
     }
+
     return all;
   },
 };

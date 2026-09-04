@@ -36,6 +36,7 @@ export const cardealpageAdapter: SiteAdapter = {
   siteKey: "cardealpage",
   displayName: "CarDealPage",
   async scrape(): Promise<NormalizedListing[]> {
+    // No parameters used — this adapter never actually scrapes, so mode/knownIds don't apply.
     const accessible = await checkAccessible();
     if (!accessible) {
       console.warn(
