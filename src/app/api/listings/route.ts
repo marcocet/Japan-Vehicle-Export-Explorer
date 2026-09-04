@@ -9,7 +9,11 @@ const SORT_MAP: Record<string, Prisma.ListingOrderByWithRelationInput> = {
   year_desc: { year: "desc" },
   mileage_asc: { mileageKm: "asc" },
   mileage_desc: { mileageKm: "desc" },
-  newest: { scrapedAt: "desc" },
+  // "Recently added" reflects when a listing was first scraped (genuinely new inventory);
+  // "recently checked" reflects the last time any scrape run touched it, which for most
+  // listings just means "still there" — the two are deliberately different sorts.
+  recently_added: { firstSeenAt: "desc" },
+  recently_checked: { scrapedAt: "desc" },
 };
 
 function parseIntParam(value: string | null): number | undefined {
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
   const fuelType = params.get("fuelType") ?? undefined;
   const bodyType = params.get("bodyType") ?? undefined;
   const sourceSites = params.getAll("sourceSite");
-  const sort = params.get("sort") ?? "newest";
+  const sort = params.get("sort") ?? "recently_added";
   const page = Math.max(1, parseIntParam(params.get("page")) ?? 1);
   const pageSize = Math.min(100, Math.max(1, parseIntParam(params.get("pageSize")) ?? 20));
   const includeInactive = params.get("includeInactive") === "true";
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest) {
       : {}),
   };
 
-  const orderBy = SORT_MAP[sort] ?? SORT_MAP.newest;
+  const orderBy = SORT_MAP[sort] ?? SORT_MAP.recently_added;
 
   const [listings, total] = await Promise.all([
     prisma.listing.findMany({

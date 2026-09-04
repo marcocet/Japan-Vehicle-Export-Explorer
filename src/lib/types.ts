@@ -19,6 +19,7 @@ export type ListingDTO = {
   description: string | null;
   isActive: boolean;
   firstSeenAt: string;
+  lastSeenAt: string;
   removedAt: string | null;
 };
 
@@ -38,13 +39,16 @@ export type FiltersResponse = {
   price: { min: number; max: number };
   year: { min: number; max: number };
   mileage: { min: number; max: number };
+  lastScrapedAt: string | null;
 };
 
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 export const DEFAULT_PAGE_SIZE = 20;
+export const DEFAULT_SORT = "recently_added";
 
 export const SORT_OPTIONS: { value: string; label: string }[] = [
-  { value: "newest", label: "Newest scraped" },
+  { value: "recently_added", label: "Recently added" },
+  { value: "recently_checked", label: "Recently checked" },
   { value: "price_asc", label: "Price: low to high" },
   { value: "price_desc", label: "Price: high to low" },
   { value: "year_desc", label: "Year: newest first" },

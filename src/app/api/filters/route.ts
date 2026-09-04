@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const includeInactive = request.nextUrl.searchParams.get("includeInactive") === "true";
   const activeFilter = includeInactive ? {} : { isActive: true };
 
-  const [makes, models, aggregates, sourceSites, bodyTypes] = await Promise.all([
+  const [makes, models, aggregates, sourceSites, bodyTypes, scrapeRecency] = await Promise.all([
     prisma.listing.findMany({
       where: { ...activeFilter },
       distinct: ["make"],
@@ -36,6 +36,9 @@ export async function GET(request: NextRequest) {
       select: { bodyType: true },
       orderBy: { bodyType: "asc" },
     }),
+    // Global (not scoped to the current filter/includeInactive toggle) — this is a
+    // site-wide "is the data fresh" signal, so it shouldn't change based on what's selected.
+    prisma.listing.aggregate({ _max: { scrapedAt: true } }),
   ]);
 
   return NextResponse.json({
@@ -46,5 +49,6 @@ export async function GET(request: NextRequest) {
     price: { min: aggregates._min.priceUsd ?? 0, max: aggregates._max.priceUsd ?? 0 },
     year: { min: aggregates._min.year ?? 0, max: aggregates._max.year ?? 0 },
     mileage: { min: aggregates._min.mileageKm ?? 0, max: aggregates._max.mileageKm ?? 0 },
+    lastScrapedAt: scrapeRecency._max.scrapedAt?.toISOString() ?? null,
   });
 }

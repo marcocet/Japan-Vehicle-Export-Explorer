@@ -6,7 +6,7 @@ import styles from "./explorer.module.css";
 import FilterSidebar, { EMPTY_FILTERS, FilterState } from "@/components/FilterSidebar";
 import ListingGrid from "@/components/ListingGrid";
 import Pagination from "@/components/Pagination";
-import { DEFAULT_PAGE_SIZE, FiltersResponse, ListingsResponse, PAGE_SIZE_OPTIONS } from "@/lib/types";
+import { DEFAULT_PAGE_SIZE, DEFAULT_SORT, FiltersResponse, ListingsResponse, PAGE_SIZE_OPTIONS } from "@/lib/types";
 
 function filtersFromSearchParams(params: URLSearchParams): FilterState {
   return {
@@ -22,7 +22,7 @@ function filtersFromSearchParams(params: URLSearchParams): FilterState {
     fuelType: params.get("fuelType") ?? "",
     bodyType: params.get("bodyType") ?? "",
     sourceSites: params.getAll("sourceSite"),
-    sort: params.get("sort") ?? "newest",
+    sort: params.get("sort") ?? DEFAULT_SORT,
     includeInactive: params.get("includeInactive") === "true",
   };
 }
@@ -41,7 +41,7 @@ function buildQueryString(filters: FilterState, page: number, pageSize: number):
   if (filters.fuelType) params.set("fuelType", filters.fuelType);
   if (filters.bodyType) params.set("bodyType", filters.bodyType);
   for (const site of filters.sourceSites) params.append("sourceSite", site);
-  if (filters.sort && filters.sort !== "newest") params.set("sort", filters.sort);
+  if (filters.sort && filters.sort !== DEFAULT_SORT) params.set("sort", filters.sort);
   if (filters.includeInactive) params.set("includeInactive", "true");
   if (page > 1) params.set("page", String(page));
   if (pageSize !== DEFAULT_PAGE_SIZE) params.set("pageSize", String(pageSize));
@@ -125,6 +125,14 @@ function ExplorerPage() {
       <header className={styles.header}>
         <h1>Japan Vehicle Export Explorer</h1>
         <p>Search used-vehicle listings aggregated from CarDealPage, CarFromJapan, BE FORWARD, SBT Japan, IBC Japan, and Car Junction.</p>
+        {filterOptions?.lastScrapedAt && (
+          <p className={styles.refreshedNote}>
+            Data last refreshed {new Date(filterOptions.lastScrapedAt).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </p>
+        )}
       </header>
       <div className={styles.layout}>
         <FilterSidebar

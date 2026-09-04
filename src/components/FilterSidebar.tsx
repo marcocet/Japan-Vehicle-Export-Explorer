@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/app/explorer.module.css";
-import { FiltersResponse, SORT_OPTIONS, sourceSiteLabel } from "@/lib/types";
+import { DEFAULT_SORT, FiltersResponse, SORT_OPTIONS, sourceSiteLabel } from "@/lib/types";
 
 export type FilterState = {
   make: string;
@@ -33,7 +33,7 @@ export const EMPTY_FILTERS: FilterState = {
   fuelType: "",
   bodyType: "",
   sourceSites: [],
-  sort: "newest",
+  sort: DEFAULT_SORT,
   includeInactive: false,
 };
 

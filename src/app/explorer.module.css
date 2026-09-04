@@ -20,6 +20,11 @@
   opacity: 0.7;
 }
 
+.refreshedNote {
+  font-size: 0.75rem;
+  opacity: 0.55;
+}
+
 .layout {
   display: flex;
   flex: 1;

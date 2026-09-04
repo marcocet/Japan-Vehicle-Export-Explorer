@@ -30,7 +30,11 @@ export default function ListingCard({ listing }: { listing: ListingDTO }) {
         </div>
         <div className={styles.cardDates}>
           <span>Added {formatDate(listing.firstSeenAt)}</span>
-          {listing.removedAt && <span>Removed {formatDate(listing.removedAt)}</span>}
+          {listing.isActive ? (
+            <span>Last checked {formatDate(listing.lastSeenAt)}</span>
+          ) : (
+            listing.removedAt && <span>Removed {formatDate(listing.removedAt)}</span>
+          )}
         </div>
         <a
           className={styles.viewLink}
