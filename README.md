@@ -29,6 +29,28 @@ npm run dev
 
 Open http://localhost:3000. Filters and results should populate immediately from the seed data.
 
+## Running as a service
+
+On this VM the app runs as a systemd service (`japan-export-explorer.service`) against
+the production build (`npm run start`), not the dev server — it survives reboots and
+auto-restarts if it crashes.
+
+```bash
+systemctl status japan-export-explorer    # check it's up
+systemctl restart japan-export-explorer   # after pulling/making code changes
+journalctl -u japan-export-explorer -f    # tail logs
+```
+
+**After any code change, rebuild before restarting** — unlike `npm run dev`, the
+production server doesn't hot-reload:
+
+```bash
+npm run build && systemctl restart japan-export-explorer
+```
+
+The unit file is `/etc/systemd/system/japan-export-explorer.service`. For active
+day-to-day development instead, stop the service and run `npm run dev` as usual.
+
 ## Scraping real data
 
 ```bash
